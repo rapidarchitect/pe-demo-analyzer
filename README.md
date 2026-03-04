@@ -101,10 +101,11 @@ Open [http://localhost:5173](http://localhost:5173).
 ## Using the app
 
 1. Drop one or more files onto the upload zone (or click to browse)
-2. Click **Analyze Deal**
-3. Watch the progress indicator as the agents work through extraction → classification → metrics
-4. Review the results: company vitals card, deal type badge with confidence score, and a metrics table tailored to the deal category
-5. Click **Copy JSON** to copy the full structured output, or **Analyze Another Deal** to reset
+2. _(Optional)_ Open **⚙ Settings** in the top-right corner to configure the LLM provider — see [LLM provider configuration](#llm-provider-configuration)
+3. Click **Analyze Deal**
+4. Watch the progress indicator as the agents work through extraction → classification → metrics
+5. Review the results: company vitals card, deal type badge with confidence score, and a metrics table tailored to the deal category
+6. Click **Copy JSON** to copy the full structured output, or **Analyze Another Deal** to reset
 
 ---
 
@@ -124,14 +125,38 @@ Multiple files can be uploaded simultaneously — they are extracted and concate
 
 ## LLM provider configuration
 
-| Provider         | `LLM_PROVIDER`      | `LLM_BASE_URL`              |
-| ---------------- | ------------------- | --------------------------- |
-| Anthropic        | `anthropic`         | —                           |
-| OpenAI           | `openai`            | —                           |
-| Ollama (local)   | `ollama`            | `http://localhost:11434/v1` |
-| LM Studio / vLLM | `openai-compatible` | your endpoint URL           |
+Provider settings can be configured in two ways — pick whichever suits your workflow.
 
-For Ollama, `LLM_API_KEY` can be left blank (the backend substitutes `"ollama"`).
+### Via the UI (per-session)
+
+Click **⚙ Settings** in the top-right corner. Changes take effect immediately without restarting anything and are saved to `localStorage`.
+
+| Provider                    | Select in dropdown            | Notes                                                                                                                                                     |
+| --------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic (Claude)          | `Anthropic (Claude)`          | Enter your `sk-ant-…` API key                                                                                                                             |
+| Ollama (local)              | `Ollama (local)`              | Base URL auto-fills to `http://localhost:11434/v1`. No API key needed. Enter the model name with its tag, e.g. `qwen3.5:latest`                           |
+| OpenAI / Azure / Compatible | `OpenAI / Azure / Compatible` | Enter API key and base URL. Full endpoint URLs are accepted — the backend strips `/chat/completions` and handles `api-version` query params automatically |
+
+The settings panel shows a **"Will use:"** summary so you can confirm the active provider before running an analysis.
+
+### Via `.env` (server default)
+
+```env
+LLM_PROVIDER=anthropic          # anthropic | openai | ollama | openai-compatible
+LLM_MODEL=claude-sonnet-4-6     # model name for chosen provider
+LLM_API_KEY=sk-ant-...          # API key (leave blank for Ollama)
+LLM_BASE_URL=                   # required for Ollama and OpenAI-compatible endpoints
+```
+
+| Provider         | `LLM_PROVIDER`      | `LLM_BASE_URL`                             |
+| ---------------- | ------------------- | ------------------------------------------ |
+| Anthropic        | `anthropic`         | —                                          |
+| OpenAI           | `openai`            | —                                          |
+| Ollama (local)   | `ollama`            | `http://localhost:11434/v1`                |
+| Azure AI Foundry | `openai-compatible` | full `/chat/completions?api-version=…` URL |
+| LM Studio / vLLM | `openai-compatible` | your endpoint URL                          |
+
+UI settings override `.env` values when provided. Leave all UI fields blank to fall back to the server defaults.
 
 ---
 
@@ -242,13 +267,13 @@ data: {"type": "error", "message": "..."}
 uv run pytest tests/ -v
 ```
 
-Expected output: **18 tests, all passing.** Tests use mocked LLM agents — no API calls are made.
+Expected output: **20 tests, all passing.** Tests use mocked LLM agents — no API calls are made.
 
 ```
 tests/test_config.py          2 passed
 tests/test_models.py          7 passed
 tests/test_extraction.py      4 passed
-tests/test_agents.py          3 passed
+tests/test_agents.py          5 passed
 tests/test_main.py            2 passed
 ```
 
@@ -279,12 +304,27 @@ Returns provider and model configuration.
 ### `POST /analyze`
 
 **Content-Type:** `multipart/form-data`
-**Field:** `files` (one or more files)
 **Response:** `text/event-stream` — SSE stream as described above
 
+| Field          | Required | Description                                                   |
+| -------------- | -------- | ------------------------------------------------------------- |
+| `files`        | yes      | One or more deal documents                                    |
+| `provider`     | no       | Override provider: `anthropic`, `ollama`, `openai-compatible` |
+| `llm_model`    | no       | Override model name                                           |
+| `llm_api_key`  | no       | Override API key                                              |
+| `llm_base_url` | no       | Override base URL (full endpoint URLs accepted)               |
+
 ```bash
+# Default (uses .env)
 curl -N -X POST http://localhost:8000/analyze \
   -F "files=@examples/buyout_teaser_acme_precision.txt"
+
+# Ollama override
+curl -N -X POST http://localhost:8000/analyze \
+  -F "files=@examples/buyout_teaser_acme_precision.txt" \
+  -F "provider=ollama" \
+  -F "llm_model=qwen3.5:latest" \
+  -F "llm_base_url=http://localhost:11434/v1"
 ```
 
 ---

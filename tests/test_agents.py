@@ -1,5 +1,4 @@
 import pytest
-import os
 from unittest.mock import patch, AsyncMock, MagicMock
 from backend.models import (
     CompanyVitals, DealClassification, BuyoutMetrics,
@@ -34,27 +33,51 @@ def test_build_model_openai(monkeypatch):
     assert model is not None
 
 
+def test_normalize_openai_base_url_strips_chat_completions():
+    """Full Azure AI Foundry URL should be normalised to a clean base + query params."""
+    from backend.agents import _normalize_openai_base_url
+
+    url = "https://my-resource.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview"
+    clean, params = _normalize_openai_base_url(url)
+
+    assert clean == "https://my-resource.services.ai.azure.com/models"
+    assert params == {"api-version": "2024-05-01-preview"}
+
+
+def test_normalize_openai_base_url_plain():
+    """A plain base URL without path suffix should be returned unchanged."""
+    from backend.agents import _normalize_openai_base_url
+
+    url = "https://api.openai.com/v1"
+    clean, params = _normalize_openai_base_url(url)
+
+    assert clean == "https://api.openai.com/v1"
+    assert params == {}
+
+
 @pytest.mark.asyncio
-async def test_run_pipeline_returns_deal_analysis(monkeypatch):
-    """Test pipeline with pydantic-ai TestModel to avoid real LLM calls."""
-    from pydantic_ai.models.test import TestModel
+async def test_run_pipeline_returns_deal_analysis():
+    """Test pipeline using mocks to avoid real LLM calls."""
+    from pydantic_ai import Agent
     from backend.agents import run_pipeline
 
-    # Patch the agents to use TestModel
     vitals_mock = CompanyVitals(name="TestCo", geography="France")
     classification_mock = DealClassification(
         category="buyout", confidence=0.88, reasoning="Mature profitable business"
     )
     metrics_mock = BuyoutMetrics(revenue="€42M", ebitda="€8M")
 
-    with patch("backend.agents.vitals_agent") as mock_v, \
-         patch("backend.agents.classifier_agent") as mock_c, \
-         patch("backend.agents.buyout_metrics_agent") as mock_m:
+    # Agents are now created inside run_pipeline; patch at the class level.
+    # asyncio.gather runs vitals then classifier first (both listed in order),
+    # then metrics — so the side_effect list matches that order.
+    responses = [
+        MagicMock(output=vitals_mock),
+        MagicMock(output=classification_mock),
+        MagicMock(output=metrics_mock),
+    ]
 
-        mock_v.run = AsyncMock(return_value=MagicMock(output=vitals_mock))
-        mock_c.run = AsyncMock(return_value=MagicMock(output=classification_mock))
-        mock_m.run = AsyncMock(return_value=MagicMock(output=metrics_mock))
-
+    with patch("backend.agents.build_model", return_value=MagicMock()), \
+         patch.object(Agent, "run", AsyncMock(side_effect=responses)):
         result = await run_pipeline("Some deal markdown text")
 
     assert isinstance(result, DealAnalysis)
