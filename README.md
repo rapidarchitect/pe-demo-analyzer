@@ -2,6 +2,10 @@
 
 A stateless AI-powered deal sourcing tool for private equity professionals. Upload a CIM, teaser, or financial model and receive structured deal classification, company vitals, and key financial metrics — streamed in real time.
 
+<p align="center">
+  <img src="demo.gif" alt="Demo" />
+</p>
+
 ---
 
 ## What it does

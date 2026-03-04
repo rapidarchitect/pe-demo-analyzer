@@ -1,9 +1,30 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
-.env
+*.pyo
 *.egg-info/
 dist/
+.pytest_cache/
+
+# Environment
+.env
+
+# Claude
+.claude/
+.mcp/
+.serena/
+.playwright-mcp/
+CLAUDE.md
+
+# macOS
+.DS_Store
+
+# Node / Frontend
 node_modules/
 .svelte-kit/
 frontend/build/
+frontend/.env
+
+# Build artifacts
+build/
